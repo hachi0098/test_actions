@@ -1,0 +1,52 @@
+name: topic
+on:
+  push:
+    branches:
+      - topic*
+  pull_request_review:
+    branches:
+      - topic*
+    types: [submitted]
+    
+jobs:
+  testing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Check if all reviews are approved
+        id: check-reviews
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pull_request_number=$(gh pr view --json number -q .number || echo "")
+          repository=$(jq --raw-output .repository.full_name "$GITHUB_EVENT_PATH")
+          echo $pull_request_number
+          echo $repository
+          # プルリク作成者を取得
+          pull_request=$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/$repository/pulls/$pull_request_number")
+          pull_request_created_user=$(echo $pull_request | jq -r '.user.login')
+          echo $pull_request
+          echo $pull_request_created_user
+          # レビュワーの数を取得
+          reviews=$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/$repository/pulls/$pull_request_number/reviews")
+          review_count=$(echo "$reviews" | jq '.[].user.login' | jq --arg id "$pull_request_created_user" 'select(. != $id) | [.]' |  jq -s -c 'flatten | unique | length')
+          echo $reviews
+          echo $review_count
+          # レビュワーが設定されていない場合、終了
+          if [ $review_count -eq 0 ]; then
+            echo 'No reviews found.'
+            exit 1
+          fi
+          # 設定されたレビュワーが全て承認しているかチェック
+          approved_review_count=$(echo "$reviews" | jq 'map(select(.state == "APPROVED")) | length')
+          if [ $review_count -eq $approved_review_count ]; then
+            echo 'All reviews are approved.'
+            echo "::set-output name=all_reviews_approved::true"
+          else
+            echo 'Not all reviews are approved.'
+            exit 1
+          fi
+      - name: check status
+        if: steps.check-reviews.outputs.all_reviews_approved != 'true'
+        run: exit 1
+      - uses: ./.github/actions/test
