@@ -7,7 +7,7 @@ on:
     branches:
       - topic*
     types: [submitted]
-    
+
 jobs:
   testing:
     runs-on: ubuntu-latest
@@ -19,9 +19,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           pull_request_number=$(gh pr view --json number -q .number || echo "")
+          if [ -z $pull_request_number ]; then
+            pull_request_number=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
+          fi
+
           repository=$(jq --raw-output .repository.full_name "$GITHUB_EVENT_PATH")
+
           echo $pull_request_number
           echo $repository
+
           # プルリク作成者を取得
           pull_request=$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/$repository/pulls/$pull_request_number")
           pull_request_created_user=$(echo $pull_request | jq -r '.user.login')
