@@ -23,6 +23,11 @@ jobs:
             pull_request_number=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
           fi
 
+          SHA=${{ github.sha }}
+          echo $SHA
+          PR_NUMBER=$(curl -s -H "Authorization: Bearer GITHUB_TOKEN" "https://api.github.com/repos/$repository/commits/$SHA/pulls" | jq -r '.[0].number')
+          echo "Pull Request Number: $PR_NUMBER"
+
           repository=$(jq --raw-output .repository.full_name "$GITHUB_EVENT_PATH")
 
           echo $pull_request_number
